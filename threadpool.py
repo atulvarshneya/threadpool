@@ -10,17 +10,17 @@ class runstatus(Enum):
 
 
 class Future:
-    def __init__(self, job, runstatus, result, exception):
+    def __init__(self, job, runstatus, resultval, exception):
         self.lock = threading.Lock()
         self.job = job
         self.runstatus = runstatus
-        self.result = result
+        self.resultval = resultval
         self.exception = exception
         self.cvs = set()
         pass
 
     def __str__(self):
-        return f'Future: job: {self.job}, runstatus: {self.runstatus}, result: {self.result}, exception: {self.exception}'
+        return f'Future: job: {self.job}, runstatus: {self.runstatus}, resultval: {self.resultval}, exception: {self.exception}'
 
     def done(self):
         with self.lock:
@@ -63,14 +63,18 @@ class Future:
             self._runstatus = value
 
     @property
-    def result(self):
+    def resultval(self):
         with self.lock:
-            retval = self._result
+            if self._exception is not None:
+                raise self._exception
+            retval = self._resultval
         return retval
-    @result.setter
-    def result(self, value):
+    @resultval.setter
+    def resultval(self, value):
         with self.lock:
-            self._result = value
+            self._resultval = value
+    def result(self):
+        return self.resultval
 
     @property
     def exception(self):
@@ -83,7 +87,7 @@ class Future:
             self._exception = value
 
 
-class Executer:
+class Executor:
 
     def __init__(self, nworkers):
         self.threads = [threading.Thread(group=None, target=self.worker, name=f'thread{w}', args=(), kwargs={}, daemon=True) for w in range(nworkers)]
@@ -91,11 +95,21 @@ class Executer:
         self.poolON = True
         [t.start() for t in self.threads]
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        self.shutdown()
+        if exception_type is None:
+            return True
+        else:
+            return False
+
     def submit(self, fn, *args, **kwargs):
         if not self.poolON:
             raise Exception('Not allowed: Thread pool is shutting down.')
         job = (fn, args, kwargs)
-        future = Future(job=job, runstatus=runstatus.INIT, result=None, exception=None)
+        future = Future(job=job, runstatus=runstatus.INIT, resultval=None, exception=None)
         self.futuresqueue.put(future)
         return future
 
@@ -111,9 +125,9 @@ class Executer:
                 retval = func(*args, **kwargs)
             except Exception as ex:
                 future.exception = ex
-                future.result = None
+                future.resultval = None
             else:
-                future.result = retval
+                future.resultval = retval
             future.runstatus = runstatus.COMPLETED
             for cv in future.list_cvs():
                 cv.acquire()
@@ -144,7 +158,6 @@ class Executer:
         for t in self.threads:
             del(t)
         del(self.futuresqueue)
-
 
 class as_completed:
     def __init__(self, futures_list):
@@ -195,15 +208,15 @@ if __name__ == '__main__':
         time.sleep(sleeptime)
         print(f'func({a},{b}) DONE')
 
-    executer = Executer(nworkers=3)
+    executor = Executor(nworkers=3)
 
-    futures = [executer.submit(func, i, b='param') for i in range(5)]
+    futures = [executor.submit(func, i, b='param') for i in range(5)]
 
-    executer.wait(futures[2])
+    executor.wait(futures[2])
     print('wait() for future 2 over')
 
     for f in as_completed(futures):
         print(f'as_completd -- {f.job[0].__name__} {f.job[1]}, {f.job[2]}: f.done() = {f.done()}.  Check {f.list_cvs()}')
     print('DONE')
     
-    executer.shutdown()
+    executor.shutdown()
