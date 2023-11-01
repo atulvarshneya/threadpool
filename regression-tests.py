@@ -5,10 +5,11 @@ import threadpool as tp
 
 
 def func(a, b):
-    sleeptime = a*2+1
-    print(f'func({a}, {b}), sleeping for {sleeptime}...')
-    time.sleep(sleeptime)
-    print(f'func({a},{b}) DONE')
+	sleeptime = a*2+1
+	print(f'func({a}, {b}), sleeping for {sleeptime}...')
+	time.sleep(sleeptime)
+	print(f'func({a},{b}) DONE')
+	return sleeptime
 
 
 print('Test 01 -----------------------------------')
@@ -22,7 +23,7 @@ executor.shutdown()
 print()
 print('Using with clause.')
 with tp.Executor(nworkers=3) as executor:
-    futures = [executor.submit(func, i, b='param') for i in range(5)]
+	futures = [executor.submit(func, i, b='param') for i in range(5)]
 
 print('Done Test 01 ------------------------------')
 print()
@@ -52,7 +53,7 @@ futures = [executor.submit(func, i, b='param') for i in range(5)]
 executor.wait_for_all()
 print('wait_for_all() over')
 for f in tp.as_completed(futures):
-    print(f'as_completd -- {f.job[0].__name__} {f.job[1]}, {f.job[2]}: f.done() = {f.done()}.  Check {f.list_cvs()}')
+	print(f'as_completd -- {f.job[0].__name__} {f.job[1]}, {f.job[2]}: f.done() = {f.done()}.  Check {f.list_cvs()}')
 print('as_completed DONE')
 executor.shutdown()
 print('Done Test 03 ------------------------------')
@@ -69,7 +70,7 @@ futures = [executor.submit(func, i, b='param') for i in range(5)]
 executor.wait(futures[2])
 print('wait() for future 2 over')
 for f in tp.as_completed(futures):
-    print(f'as_completd -- {f.job[0].__name__} {f.job[1]}, {f.job[2]}: f.done() = {f.done()}.  Check {f.list_cvs()}')
+	print(f'as_completd -- {f.job[0].__name__} {f.job[1]}, {f.job[2]}: f.done() = {f.done()}.  Check {f.list_cvs()}')
 print('as_completed DONE')
 executor.shutdown()
 print('Done Test 04 ------------------------------')
@@ -82,24 +83,44 @@ All jobs complete, except for func 2 raises an exception.
 EXPECT: All futures return appropriate results, future 2 raises an exception.
 """)
 def func_exception(a, b):
-    sleeptime = a
-    time.sleep(sleeptime)
-    if a == 2:
-        print(f'func({a},{b}) DONE with EXCEPTION')
-        raise Exception('Exception test')
-    else:
-        print(f'func({a},{b}) DONE')
-    return sleeptime
+	sleeptime = a
+	time.sleep(sleeptime)
+	if a == 2:
+		print(f'func({a},{b}) DONE with EXCEPTION')
+		raise Exception('Exception test')
+	else:
+		print(f'func({a},{b}) DONE')
+	return sleeptime
 
 with tp.Executor(nworkers=3) as executor:
-    futures = [executor.submit(func_exception, i, b='param') for i in range(5)]
+	futures = [executor.submit(func_exception, i, b='param') for i in range(5)]
 
 print()
 print('fetching results from all futures')
 for f in futures:
-    try:
-        print(f'{f.job[0].__name__} {f.result()}')
-    except Exception as ex:
-        print(ex)
+	try:
+		print(f'{f.job[0].__name__} {f.result()}')
+	except Exception as ex:
+		print(ex)
 print('Done Test 05 ------------------------------')
+print()
+
+
+print('Test 06 -----------------------------------')
+print("""Map a function over list of 5 items, using 3 threads.
+EXPECT: map returns an iterable object, and iterating over it yeild the results.
+""")
+def square(a):
+	time.sleep(2)
+	if a == 2:
+		# raise Exception('Exception test for map')
+		pass
+	print(f'square {a} DONE')
+	return a*a
+
+list = [0,1,2,3,4]
+with tp.Executor(nworkers=3) as executor:
+	for num, sqr in zip(list, executor.map(square, list)):
+		print(f'{num} squared is {sqr}')
+print('Done Test 06 ------------------------------')
 print()
