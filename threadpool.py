@@ -51,6 +51,9 @@ class Future:
 			cv.release()
 			self.rem_cv(cv)
 
+	def result(self):
+		return self.resultval
+
 	@property
 	def job(self):
 		with self.lock:
@@ -82,8 +85,6 @@ class Future:
 	def resultval(self, value):
 		with self.lock:
 			self._resultval = value
-	def result(self):
-		return self.resultval
 
 	@property
 	def exception(self):
